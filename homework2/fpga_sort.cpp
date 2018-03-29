@@ -55,6 +55,7 @@ int fpga_sort(int num_of_elements, float *data)
 {
 	cl_mem fpga_buff;
     int err;
+    int subarr_size;
 
     init_opencl();
 
@@ -93,7 +94,15 @@ int fpga_sort(int num_of_elements, float *data)
     /* Sync */
     clFinish(queue);
 
-	
+
+    for(subarr_size = 2; subarr_size <= (num_of_elements / 2); 
+            subarr_size = subarr_size * 2) {
+        /* TODO 
+         * set kernel 
+         * enqueue args 
+         * clfinish
+         */
+    }
     return 0;
 }
 
