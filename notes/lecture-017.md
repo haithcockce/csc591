@@ -26,3 +26,21 @@
   slow.
 - ALUs are doing largely just basic arithmetic operations on vectors. So ALUs don't need to do
   complex things. Likewise, no need for high performance branch predictors.
+
+### NVIDIA GPU Arch
+
+- PCIe interface
+- A group of processors is a streaming multiprocessors
+- Thread scheduler between PCIe bus and streaming multiprocessors
+- L2 Cache is global memory 
+- And high bandwidth memory controller 
+- Each streaming multiprocessor has several register files with tons of cores (example, 192 cores)
+
+### CPU vs GPU 
+
+- GPU is tolerable to memory latencies due to massive throughput. Prefer data level parallelism and _not_ thread-level parallelism. 
+
+### Accelerated Processing Unit 
+
+- Effectively embedded GPU in CPU (but can be dedicated hardware as well). 
+- APU and CPU/GPU are all connected via DRAM but the RAM is optimized for latency and not bandwidth. 
