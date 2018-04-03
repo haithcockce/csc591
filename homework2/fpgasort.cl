@@ -32,7 +32,7 @@ __kernel void fpgasort(__global float* restrict data,
         if(left_lower > mid) {
             temp[temp_index++] = data[right_lower++];
         }
-        else if(right_lower > right_upper || 
+        else if(right_lower > right_upper) {
             temp[temp_index++] = data[left_lower++];
         }
         else if(data[right_lower] < data[left_lower]) {
