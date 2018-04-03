@@ -2,10 +2,10 @@
 //                        __global const float *y, 
 //                        __global float *restrict z)
 
-__kernel void fpgasort(__global float *data, 
-                       __global float *temp, 
-                       __global int num_of_elements,
-                       __global int subarr_size)
+__kernel void fpgasort(__global float* restrict data, 
+                       __global float* restrict temp, 
+                       int num_of_elements,
+                       int subarr_size)
 {
     int index;          // index of work item
     int left_lower;     // start of left subarray
@@ -27,6 +27,7 @@ __kernel void fpgasort(__global float *data,
     mid = (left_lower + right_upper) / 2;
     right_lower = mid + 1;
 
+    temp_index = 0;
     while(left_lower <= mid || right_lower <= right_upper) {
         if(left_lower > mid || data[right_lower] < data[left_lower]) {
             temp[temp_index++] = data[right_lower++];

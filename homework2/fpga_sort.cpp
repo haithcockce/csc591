@@ -56,7 +56,7 @@ bool init_opencl();
 
 int fpga_sort(int num_of_elements, float *data)
 {
-	cl_mem fpga_data;
+    cl_mem fpga_data;
     cl_mem fpga_temp;
     int err;
     int subarr_size;
@@ -97,7 +97,7 @@ int fpga_sort(int num_of_elements, float *data)
          */
 
         /* Send data to board */
-        err = clEnqueueWriteBuffer(queue, fpga_data, CL_FALSE,
+        err = clEnqueueWriteBuffer(queue[0], fpga_data, CL_FALSE,
             0, num_of_elements * sizeof(float), data, 0, NULL, NULL);
         if (err != CL_SUCCESS)
         {  
@@ -106,7 +106,7 @@ int fpga_sort(int num_of_elements, float *data)
         }
 
         /* Send a tempbuff to the board (alloc once rather than many) */
-        err = clEnqueueWriteBuffer(queue, fpga_temp, CL_FALSE,
+        err = clEnqueueWriteBuffer(queue[0], fpga_temp, CL_FALSE,
             0, num_of_elements * sizeof(float), temp, 0, NULL, NULL);
         if (err != CL_SUCCESS)
         {  
@@ -115,28 +115,28 @@ int fpga_sort(int num_of_elements, float *data)
         }
 
         /* Sync */
-        clFinish(queue);
+        clFinish(queue[0]);
         
         /* Setting kernel arguments */ 
         argi = 0;
-        status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &fpga_data);
+        status = clSetKernelArg(kernel[0], argi++, sizeof(cl_mem), &fpga_data);
         checkError(status, "Failed to set arg 'float *data'\n");
-        status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &fpga_temp);
+        status = clSetKernelArg(kernel[0], argi++, sizeof(cl_mem), &fpga_temp);
         checkError(status, "Failed to set arg 'float *temp'\n");
-        status = clSetKernelArg(kernel, argi++, sizeof(num_of_elements), &num_of_elements);
+        status = clSetKernelArg(kernel[0], argi++, sizeof(num_of_elements), &num_of_elements);
         checkError(status, "Failed to set arg 'int num_devices'\n");
-        status = clSetKernelArg(kernel, argi++, sizeof(subarr_size), &subarr_size);
+        status = clSetKernelArg(kernel[0], argi++, sizeof(subarr_size), &subarr_size);
         checkError(status, "Failed to set arg 'int subarr_size'\n");
 
         /* Launch the kernel */
-        status = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, 
+        status = clEnqueueNDRangeKernel(queue[0], kernel[0], 1, NULL, 
                 global_work_size, local_work_size, 0, NULL, &kernel_event);
         checkError(status, "Failed to launch kernel");
 
         /* Wait for kernels to finish and read the semi-sorted data array */
         clWaitForEvents(num_devices, &kernel_event);
         clReleaseEvent(kernel_event);
-        status = clEnqueueReadBuffer(queue, fpga_data, CL_TRUE, 0, 
+        status = clEnqueueReadBuffer(queue[0], fpga_data, CL_TRUE, 0, 
                 sizeof(float) * num_of_elements, data, 0, NULL, NULL);
         checkError(status, "Failed to read *data");
 
