@@ -18,15 +18,13 @@
 			<FILE name="acl_fifo.v" />
 			<FILE name="acl_fp_cmp.v" />
 			<FILE name="acl_id_iterator.v" />
-			<FILE name="acl_int_div32s.v" />
-			<FILE name="acl_int_mult32s_s5.v" />
+			<FILE name="acl_int_mult64s_s5.v" />
 			<FILE name="acl_kernel_finish_detector.v" />
 			<FILE name="acl_ll_fifo.v" />
 			<FILE name="acl_ll_ram_fifo.v" />
 			<FILE name="acl_loop_limiter.v" />
 			<FILE name="acl_multi_fanout_adaptor.v" />
 			<FILE name="acl_staging_reg.v" />
-			<FILE name="acl_stall_free_sink.v" />
 			<FILE name="acl_toggle_detect.v" />
 			<FILE name="acl_valid_fifo_counter.v" />
 			<FILE name="acl_work_group_dispatcher.v" />
@@ -47,12 +45,14 @@
 			<FILE name="sv_mult27.v" />
 		</REQUIREMENTS>
 		<DATA>
-			<INTERFACE port="local_bb2_ld__inst0" type="master" width="256" burstwidth="5" pipelined="true" addr_space="__global" aspace_id="1" optype="read" criticality="1048576" buffer_location="" group_id="0" />
-			<INTERFACE port="local_bb3_ld__pre_pre_inst0" type="master" width="256" burstwidth="5" pipelined="true" addr_space="__global" aspace_id="1" optype="read" criticality="1073741824" buffer_location="" group_id="0" />
-			<INTERFACE port="local_bb5_st__pre_pre_inst0" type="master" width="256" burstwidth="5" pipelined="true" addr_space="__global" aspace_id="1" optype="write" criticality="4194303" buffer_location="" group_id="0" />
+			<INTERFACE port="local_bb3_ld__inst0" type="master" width="256" burstwidth="5" pipelined="true" addr_space="__global" aspace_id="1" optype="read" criticality="1073741824" buffer_location="" group_id="0" />
+			<INTERFACE port="local_bb3_ld__u2_inst0" type="master" width="256" burstwidth="5" pipelined="true" addr_space="__global" aspace_id="1" optype="read" criticality="1073741824" buffer_location="" group_id="0" />
+			<INTERFACE port="local_bb5_ld__inst0" type="master" width="256" burstwidth="5" pipelined="true" addr_space="__global" aspace_id="1" optype="read" criticality="4194303" buffer_location="" group_id="0" />
+			<INTERFACE port="local_bb5_st__109_inst0" type="master" width="256" burstwidth="5" pipelined="true" addr_space="__global" aspace_id="1" optype="write" criticality="4194303" buffer_location="" group_id="0" />
 			<INTERFACE port="local_bb6_ld__inst0" type="master" width="256" burstwidth="5" pipelined="true" addr_space="__global" aspace_id="1" optype="read" criticality="3072" buffer_location="" group_id="0" />
 			<INTERFACE port="local_bb6_st__inst0" type="master" width="256" burstwidth="5" pipelined="true" addr_space="__global" aspace_id="1" optype="write" criticality="3072" buffer_location="" group_id="0" />
-			<INTERFACE port="local_bb8_st__inst0" type="master" width="256" burstwidth="5" pipelined="true" addr_space="__global" aspace_id="1" optype="write" criticality="4095" buffer_location="" group_id="0" />
+			<INTERFACE port="local_bb8_ld__inst0" type="master" width="256" burstwidth="5" pipelined="true" addr_space="__global" aspace_id="1" optype="read" criticality="4095" buffer_location="" group_id="0" />
+			<INTERFACE port="local_bb8_st__52_inst0" type="master" width="256" burstwidth="5" pipelined="true" addr_space="__global" aspace_id="1" optype="write" criticality="4095" buffer_location="" group_id="0" />
 		</DATA>
 		<KERNEL_ARGS>
 			<ARGUMENT name="data" opencl_access_type="ACL_ARG_ADDR_GLOBAL" opencl_type_category="ACL_ARG_MEM_OBJ" size="8" >

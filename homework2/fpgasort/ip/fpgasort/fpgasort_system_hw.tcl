@@ -90,15 +90,13 @@ add_file acl_ic_slave_wrp.v {SYNTHESIS SIMULATION}
 add_file acl_ic_to_avm.v {SYNTHESIS SIMULATION}
 add_file acl_ic_wrp_reg.v {SYNTHESIS SIMULATION}
 add_file acl_id_iterator.v {SYNTHESIS SIMULATION}
-add_file acl_int_div32s.v {SYNTHESIS SIMULATION}
-add_file acl_int_mult32s_s5.v {SYNTHESIS SIMULATION}
+add_file acl_int_mult64s_s5.v {SYNTHESIS SIMULATION}
 add_file acl_kernel_finish_detector.v {SYNTHESIS SIMULATION}
 add_file acl_ll_fifo.v {SYNTHESIS SIMULATION}
 add_file acl_ll_ram_fifo.v {SYNTHESIS SIMULATION}
 add_file acl_loop_limiter.v {SYNTHESIS SIMULATION}
 add_file acl_multi_fanout_adaptor.v {SYNTHESIS SIMULATION}
 add_file acl_staging_reg.v {SYNTHESIS SIMULATION}
-add_file acl_stall_free_sink.v {SYNTHESIS SIMULATION}
 add_file acl_toggle_detect.v {SYNTHESIS SIMULATION}
 add_file acl_valid_fifo_counter.v {SYNTHESIS SIMULATION}
 add_file acl_work_group_dispatcher.v {SYNTHESIS SIMULATION}
