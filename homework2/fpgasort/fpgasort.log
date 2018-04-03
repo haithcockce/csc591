@@ -1,0 +1,7 @@
+/home/cehaith2/csc591/homework2/fpgasort.cl:7:37: error: parameter may not be qualified with an address space
+                       __global int num_of_elements,
+                                    ^
+/home/cehaith2/csc591/homework2/fpgasort.cl:8:37: error: parameter may not be qualified with an address space
+                       __global int subarr_size)
+                                    ^
+2 errors generated.

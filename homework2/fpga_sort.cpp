@@ -30,11 +30,14 @@ cl_kernel kernel; // num_devices elements
 // OpenCL runtime configuration
 cl_platform_id platform = NULL;
 unsigned num_devices = 0;
+//cl_device_id device; // num_devices elements
 scoped_array<cl_device_id> device; // num_devices elements
 cl_context context = NULL;
+//cl_command_queue queue; // num_devices elements
 scoped_array<cl_command_queue> queue; // num_devices elements
 cl_program program = NULL;
 scoped_array<cl_kernel> kernel; // num_devices elements
+//cl_kernel kernel; // num_devices elements
 #endif
 
 #ifdef APPLE
@@ -81,7 +84,7 @@ int fpga_sort(int num_of_elements, float *data)
 	    fprintf(stderr, "Failed to create temporary buffer");
     	exit(1);
   	}
-    temp = malloc(sizeof(float) * num_of_elements);
+    temp = (float*) malloc(sizeof(float) * num_of_elements);
 
     /* Merge sort is recursive, but OpenCL doesn't allow recursion (janky)
      * so instead mergesort is then iterative. Each loop iteration is the 
