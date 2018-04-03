@@ -129,9 +129,9 @@ int fpga_sort(int num_of_elements, float *data)
         checkError(status, "Failed to set arg 'int subarr_size'\n");
 
         /* Launch the kernel */
-        status = clEnqueueNDRangeKernel(queue[0], kernel[0], 1, NULL, 
-                global_work_size, local_work_size, 0, NULL, &kernel_event);
-        checkError(status, "Failed to launch kernel");
+//        status = clEnqueueNDRangeKernel(queue[0], kernel[0], 1, NULL, 
+//                global_work_size, local_work_size, 0, NULL, &kernel_event);
+//        checkError(status, "Failed to launch kernel");
 
         /* Wait for kernels to finish and read the semi-sorted data array */
         clWaitForEvents(num_devices, &kernel_event);
