@@ -67,6 +67,13 @@ int fpga_sort(int num_of_elements, float *data)
     const size_t local_work_size[1] = { 256 };
     cl_int status;
 
+	    int index;          // index of work item 
+	    int left_lower;     // start of left subarray
+	    int mid;            // end of left subarray
+	    int right_upper;    // end of right subarray
+	    int right_lower;    // start orf right subarray (aka mid + 1)
+	    int temp_index;     // Index into semi-sorted interim result buffer
+
     init_opencl();
 
 	/* Create buffer for initial data */
@@ -133,6 +140,39 @@ int fpga_sort(int num_of_elements, float *data)
 //                global_work_size, local_work_size, 0, NULL, &kernel_event);
 //        checkError(status, "Failed to launch kernel");
 
+        int i;
+        for(i = 0; i < num_of_elements; i++) {
+
+	    // ith work item works on ith and ith + 1 subarrays,
+	    // so don't do anything when ith subarray is more than
+	    // total subarrays
+	    //index = get_global_id(0);
+	    left_lower = index * subarr_size;
+	    if(left_lower >= num_of_elements) {
+		return;
+	    }
+
+	    right_upper = left_lower + subarr_size - 1;
+	    mid = (left_lower + right_upper) / 2;
+	    right_lower = mid + 1;
+
+	    while(left_lower <= mid || right_lower <= right_upper) {
+		if(left_lower > mid || data[right_lower] < data[left_lower]) {
+		    temp[temp_index++] = data[right_lower++];
+		}
+		else if(right_lower > right_upper ||
+				    data[left_lower] <= data[right_lower]) {
+		    temp[temp_index++] = data[left_lower++];
+		}
+	    }
+
+	    // Copy the semi-sorted temp content back to the original data set
+	    for(index = get_global_id(0) * subarr_size; index <= right_upper; index++) {
+		data[index] = temp[index];
+	    }
+
+        }
+
         /* Wait for kernels to finish and read the semi-sorted data array */
         clWaitForEvents(num_devices, &kernel_event);
         clReleaseEvent(kernel_event);
@@ -151,7 +191,6 @@ int fpga_sort(int num_of_elements, float *data)
     }
     return 0;
 }
-
 
 // Initializes the OpenCL objects.
 bool init_opencl() {
