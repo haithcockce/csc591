@@ -17,7 +17,8 @@ __kernel void fpgasort(__global float *data,
     // ith work item works on ith and ith + 1 subarrays, 
     // so don't do anything when ith subarray is more than
     // total subarrays
-    left_lower = get_global_id(0) * subarr_size;
+    index = get_global_id(0);
+    left_lower = index * subarr_size;
     if(left_lower >= num_of_elements) {
         return;
     }
@@ -36,6 +37,10 @@ __kernel void fpgasort(__global float *data,
         }
     }
     
+    // Copy the semi-sorted temp content back to the original data set
+    for(index = get_global_id(0) * subarr_size; index <= right_upper; index++) {
+        data[index] = temp[index];
+    }
     
     // Check in on notes 
 }

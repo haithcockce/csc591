@@ -53,55 +53,98 @@ bool init_opencl();
 
 int fpga_sort(int num_of_elements, float *data)
 {
-	cl_mem fpga_buff;
+	cl_mem fpga_data;
+    cl_mem fpga_temp;
     int err;
     int subarr_size;
+    cl_event kernel_event;
+    unsigned argi;  
+    float *temp;
+    const size_t global_work_size[1] = { num_of_elements };
+    const size_t local_work_size[1] = { 256 };
+    cl_int status;
 
     init_opencl();
 
-	/* Buffer for initial data */
-    fpga_buff_a = clCreateBuffer(context, CL_MEM_READ_WRITE, 
+	/* Create buffer for initial data */
+    fpga_data = clCreateBuffer(context, CL_MEM_READ_WRITE, 
 		num_of_elements * sizeof(float), NULL, &err);
     if (err != CL_SUCCESS) {  
 	    fprintf(stderr, "Failed to create buffer for data");
     	exit(1);
   	}
 
-	/* Buffer to store intermediate results */
-    fpga_buff_b = clCreateBuffer(context, CL_MEM_READ_WRITE, 
+	/* Create buffer to store intermediate results */
+    fpga_temp = clCreateBuffer(context, CL_MEM_READ_WRITE, 
 		num_of_elements * sizeof(float), NULL, &err);
     if (err != CL_SUCCESS) {  
 	    fprintf(stderr, "Failed to create temporary buffer");
     	exit(1);
   	}
+    temp = malloc(sizeof(float) * num_of_elements);
 
-	/* Send data to board */
-    err = clEnqueueWriteBuffer(queue, fpga_buff_a, CL_FALSE,
-        0, num_of_elements * sizeof(float), data, 0, NULL, NULL);
-  	if (err != CL_SUCCESS)
-  	{  
-    	fprintf(stderr, "Failed to transfer buffer for data");
-    	exit(1);
-  	}
-    err = clEnqueueWriteBuffer(queue, fpga_buff_b, CL_FALSE,
-        0, num_of_elements * sizeof(float), data, 0, NULL, NULL);
-  	if (err != CL_SUCCESS)
-  	{  
-    	fprintf(stderr, "Failed to transfer buffer for temporary buffer");
-    	exit(1);
-  	}
-
-    /* Sync */
-    clFinish(queue);
-
-
-    for(subarr_size = 2; subarr_size <= (num_of_elements / 2); 
+    /* Merge sort is recursive, but OpenCL doesn't allow recursion (janky)
+     * so instead mergesort is then iterative. Each loop iteration is the 
+     * next up recursion level starting with the leaf nodes of the recursion
+     * tree. */
+    for(subarr_size = 2; subarr_size <= num_of_elements; 
             subarr_size = subarr_size * 2) {
         /* TODO 
-         * set kernel 
-         * enqueue args 
-         * clfinish
+         * read from the board
          */
+
+        /* Send data to board */
+        err = clEnqueueWriteBuffer(queue, fpga_data, CL_FALSE,
+            0, num_of_elements * sizeof(float), data, 0, NULL, NULL);
+        if (err != CL_SUCCESS)
+        {  
+            fprintf(stderr, "Failed to transfer buffer for data");
+            exit(1);
+        }
+
+        /* Send a tempbuff to the board (alloc once rather than many) */
+        err = clEnqueueWriteBuffer(queue, fpga_temp, CL_FALSE,
+            0, num_of_elements * sizeof(float), temp, 0, NULL, NULL);
+        if (err != CL_SUCCESS)
+        {  
+            fprintf(stderr, "Failed to transfer buffer for temporary buffer");
+            exit(1);
+        }
+
+        /* Sync */
+        clFinish(queue);
+        
+        /* Setting kernel arguments */ 
+        argi = 0;
+        status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &fpga_data);
+        checkError(status, "Failed to set arg 'float *data'\n");
+        status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &fpga_temp);
+        checkError(status, "Failed to set arg 'float *temp'\n");
+        status = clSetKernelArg(kernel, argi++, sizeof(num_of_elements), &num_of_elements);
+        checkError(status, "Failed to set arg 'int num_devices'\n");
+        status = clSetKernelArg(kernel, argi++, sizeof(subarr_size), &subarr_size);
+        checkError(status, "Failed to set arg 'int subarr_size'\n");
+
+        /* Launch the kernel */
+        status = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, 
+                global_work_size, local_work_size, 0, NULL, &kernel_event);
+        checkError(status, "Failed to launch kernel");
+
+        /* Wait for kernels to finish and read the semi-sorted data array */
+        clWaitForEvents(num_devices, &kernel_event);
+        clReleaseEvent(kernel_event);
+        status = clEnqueueReadBuffer(queue, fpga_data, CL_TRUE, 0, 
+                sizeof(float) * num_of_elements, data, 0, NULL, NULL);
+        checkError(status, "Failed to read *data");
+
+    }
+    /* Be good little boys and girls and clean up after ourselves */
+    free(temp);
+    if(fpga_data) {
+        clReleaseMemObject(fpga_data);
+    }
+    if(fpga_temp) {
+        clReleaseMemObject(fpga_temp);
     }
     return 0;
 }
