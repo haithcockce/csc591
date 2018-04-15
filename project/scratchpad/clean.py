@@ -62,7 +62,6 @@ def main():
                 except:
                     data[i][j] = mappings[j].index(data[i][j])
 
-    ipdb.set_trace()
 
 
 if __name__ == '__main__':
