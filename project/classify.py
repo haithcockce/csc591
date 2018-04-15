@@ -16,39 +16,51 @@ def main():
     args = parse_args()
     if args.debug:
         ipdb.set_trace()
-    setup_data(args.data_filename)
+    clustering = setup_data(Clustering(args))
 
 
+
+class Clustering:
+    def __init__(self, args):
+        self.mappings = []
+        self.data = []
+        self.labels = set()
+        self.k = args.k
+        self.predicted = []
+        self.actual = []
+        self.data_filename = args.data_filename
+        self.centroids = []
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--data', dest='data_filename', 
             default='data/iris.data', help='Defaults to iris')
     parser.add_argument('-k', '--means', dest='k', required=True,
-            help='Centroid count. Must be equal to classes')
+            help='Centroid count. Must be equal to classes', type=int)
     parser.add_argument('--debug', dest='debug', action='store_true',
             help='Start tracing')
     return parser.parse_args()
 
 
-def setup_data(data_filename):
+def setup_data(clustering):
     """
     """
 
     # Check if data file exists
-    if not os.path.exists(data_filename):
-        print("File '{}' does not exist".format(data_filename))
+    if not os.path.exists(clustering.data_filename):
+        print("File '{}' does not exist".format(clustering.data_filename))
         sys.exit(1)
 
-    mappings = _setup_mappings(open(data_filename))
-    data, mappings, labels = _fill_in_data(open(data_filename), mappings)
-    data, mappings, labels = _clean_data(data, mappings, labels)
+    clustering = _setup_mappings(clustering)
+    clustering = _fill_in_data(clustering)
+    clustering = _clean_data(clustering)
+    return clustering
 
 ################################################################################
 #                               HELPER FUNCTIONS                               #
 ################################################################################
 
-def _setup_mappings(csvfile):
+def _setup_mappings(clustering):
     """Helper Function: Setup an empty mappings list
 
     The csv data files can be mixed data types (string, float, int), 
@@ -63,28 +75,28 @@ def _setup_mappings(csvfile):
     discarded to prevent skewing clustering. 
 
     Args:
-        csvfile (File): The file pointer to the csv data file
+        clustering (Clustering): See class Clustering. Mappings is not
+            yet filled in 
 
     Returns:
-        list: n-th item is either an empty list or set
+        clustering (Clustering): The parameter's mappings attribute is
+            now initialized
     """
 
-    mappings = []
-
-    row = next(csv.reader(csvfile)))
+    row = next(csv.reader(open(clustering.data_filename)))
     for i in range(len(row) - 1):    # ignore the last column (label)
         if row[i].isdigit():
-            mappings.append([])
+            clustering.mappings.append([])
         else: 
             try:
                 float(row[i])        # isdecimal() always returns false, but 
-                mappings.append([])  # this works so whatever
+                clustering.mappings.append([])  # this works so whatever
             except:
-                mappings.append(set())
-    return mappings
+                clustering.mappings.append(set())
+    return clustering
 
 
-def _fill_in_data(csvfile, mappings):
+def _fill_in_data(clustering):
     """Helper Function: Read data from csv and setup mappings
 
     While reading in the data, parse it and track unique values of
@@ -92,34 +104,31 @@ def _fill_in_data(csvfile, mappings):
     list and the indeces of the entries replace the actual values. 
 
     Args:
-        csvfile (File): Open file pointer to the csv data file
-        mappings (list): 2D list with either empty sets or lists
+        clustering (Clustering): Initialized but empty clustering object
 
     Returns:
-        data (list): 2D list of data from csv
-        mappings (list): 2D list with empty lists (place holders) or
-                         sets of unique values from columns
-        labels (list): Unique classifications the data can have
+        clustering (Clustering): .data, .labels, .actual, and .mappings
+            now are filled in but not yet usable. 
     """
 
-    data = []
-    labels = set()
-    reader = csv.reader(csvfile)
+    reader = csv.reader(open(clustering.data_filename))
 
     for row in reader:
-	if len(row) == 0:  # Skip potentially empty rows
-	    continue
-	for i in range(len(row) - 1):    # -1 because we'll grab classes later
-	    if type(mappings[i]) == set: 
-		mappings[i].add(row[i])  # add the unique value 
-	labels.add(row[-1])  # grab the label now
-	del row[-1]          # Remove classification 
-	data.append(row)
-    return data, mappings, labels
+        if len(row) == 0:  # Skip potentially empty rows
+            continue
+        for i in range(len(row) - 1):    # -1 because we'll grab classes later
+            if type(clustering.mappings[i]) == set: 
+                clustering.mappings[i].add(row[i])  # add the unique value 
+        clustering.labels.add(row[-1])     # grab the label now
+        clustering.actual.append(row[-1])  # and record actual classification
+        del row[-1]          # Remove classification 
+        clustering.data.append(row)
+    clustering.predicted = [-1] * len(clustering.data)
+    return clustering
 
 
 
-def _clean_data(data, mappings, labels):
+def _clean_data(clustering):
     """Helper Function: Convert data from strings to int/floats
 
     csv's reader reads csvs as strings but the actual values can vary in
@@ -131,36 +140,34 @@ def _clean_data(data, mappings, labels):
     clustering.
 
     Args:
-        data (list): mixed data from csv data file
-        mappings (list): lists of unique values of strings from data
-        labels (set): unique classifications of the data
+        clustering (Clustering): clustering attributes are filled in 
+            but needto be translated
 
     Returns:
-        data (list): converted data. Should be lists of ints/floats
-        mappings (list): converted mappings. Should be lists of strings
-        labels (list): classifications in a list.
+        clustering (Clustering): attributes have been translated to 
+            lists of ints or floats
     """
 
     # Convert everything to lists so we have indeces
-    for i in range(len(mappings)):
-        mappings[i] = list(mappings[i])
-    labels = list(labels)
+    for i in range(len(clustering.mappings)):
+        clustering.mappings[i] = list(clustering.mappings[i])
+    clustering.labels = list(clustering.labels)
 
     # Clean data, so convert strings to int, float, or mapping
-    for i in range(len(data)):
-        for j in range(len(data[i])):
+    for i in range(len(clustering.data)):
+        for j in range(len(clustering.data[i])):
 
             # convert to int if int
-            if data[i][j].isdigit():
-                data[i][j] = int(data[i][j])
+            if clustering.data[i][j].isdigit():
+                clustering.data[i][j] = int(clustering.data[i][j])
             else:
                 # convert to float if float
                 try:
-                    data[i][j] = float(data[i][j])
+                    clustering.data[i][j] = float(clustering.data[i][j])
                 # use index as int replacement
                 except:
-                    data[i][j] = mappings[j].index(data[i][j])
-    return data, mappings, labels
+                    clustering.data[i][j] = clustering.mappings[j].index(data[i][j])
+    return clustering
 
 if __name__== "__main__":
     main()
