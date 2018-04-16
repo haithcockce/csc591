@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
 #TODO 
-# - check pathlib for path creation
-# - actually read in stuff
-# - redo name files to be CSV of column names
+# - k-means clustering
+# - Cross validation 
 
 import argparse 
 import ipdb
@@ -11,12 +10,15 @@ import os
 import sys
 import numpy
 import csv
+from numba import vectorize, guvectorize, int64, float64, jit
+
 
 def main():
     args = parse_args()
     if args.debug:
         ipdb.set_trace()
     clustering = setup_data(Clustering(args))
+    clustering = k_means_clustering(clustering)
 
 
 
@@ -30,6 +32,7 @@ class Clustering:
         self.actual = []
         self.data_filename = args.data_filename
         self.centroids = []
+        self.offload = args.offload
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -39,6 +42,8 @@ def parse_args():
             help='Centroid count. Must be equal to classes', type=int)
     parser.add_argument('--debug', dest='debug', action='store_true',
             help='Start tracing')
+    parser.add_argument('--g', '--gpu', dest='offload',
+            action='store_true', help='Offload to GPU')
     return parser.parse_args()
 
 
@@ -56,6 +61,8 @@ def setup_data(clustering):
     clustering = _clean_data(clustering)
     return clustering
 
+def k_means_clustering(clustering):
+    
 ################################################################################
 #                               HELPER FUNCTIONS                               #
 ################################################################################
@@ -94,6 +101,7 @@ def _setup_mappings(clustering):
             except:
                 clustering.mappings.append(set())
     return clustering
+
 
 
 def _fill_in_data(clustering):
@@ -168,6 +176,49 @@ def _clean_data(clustering):
                 except:
                     clustering.data[i][j] = clustering.mappings[j].index(data[i][j])
     return clustering
+
+
+
+def naive_distance(data, centroids, classes):
+    """
+    """
+    min_dist = sys.maxsize
+    min_class = -1
+    dist = 0 
+    for i in range(data.shape[0]):
+        for j in range(centroids.shape[0]):
+            dist = 0 
+            for k in range(centroids.shape[1]):
+                dist += (data[i][k] - centroids[j][k]) ** 2
+            dist = dist ** 0.5 
+            if dist < min_dist:
+                min_dist = dist
+                min_class = j 
+        classes[i] = min_class
+        min_dist = sys.maxsize
+    return classes
+
+
+
+@guvectorize([(int64[:,:], int64[:,:], int64, int64[:])], '(n,p),(q,p),()->(n)')
+def vectorized_distance(data, centroids, maxsize, classes):
+    """
+    """
+    min_dist = maxsize
+    min_class = -1
+    dist = 0
+    for i in range(data.shape[0]):
+        for j in range(centroids.shape[0]):
+            dist = 0
+            for k in range(centroids.shape[1]):
+                dist += (data[i][k] - centroids[j][k]) ** 2
+            dist = dist ** 0.5
+            if dist < min_dist:
+                min_dist = dist
+                min_class = j
+        classes[i] = min_class
+        min_dist = maxsize
+
 
 if __name__== "__main__":
     main()
