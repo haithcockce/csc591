@@ -11,6 +11,7 @@ import sys
 import numpy
 import csv
 from numba import vectorize, guvectorize, int64, float64, jit
+import copy
 
 
 def main():
@@ -33,6 +34,7 @@ class Clustering:
         self.data_filename = args.data_filename
         self.centroids = []
         self.offload = args.offload
+        self.delta = 0
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -62,6 +64,13 @@ def setup_data(clustering):
     return clustering
 
 def k_means_clustering(clustering):
+    clustering = _initialize_centroids(clustering)
+    optimized_c = copy.deepcopy(clustering)
+    # TODO
+    # - time both
+    # - loop naive and gpu until delta < % of total records 
+    #   (or 300 max like scikit)
+    # - need to loop assignment and update clustering
     
 ################################################################################
 #                               HELPER FUNCTIONS                               #
@@ -161,47 +170,129 @@ def _clean_data(clustering):
         clustering.mappings[i] = list(clustering.mappings[i])
     clustering.labels = list(clustering.labels)
 
-    # Clean data, so convert strings to int, float, or mapping
+    # Clean data, so convert strings to float (including ints and mappings)
     for i in range(len(clustering.data)):
         for j in range(len(clustering.data[i])):
 
             # convert to int if int
             if clustering.data[i][j].isdigit():
-                clustering.data[i][j] = int(clustering.data[i][j])
+                clustering.data[i][j] = float(clustering.data[i][j])
             else:
                 # convert to float if float
                 try:
                     clustering.data[i][j] = float(clustering.data[i][j])
                 # use index as int replacement
                 except:
-                    clustering.data[i][j] = clustering.mappings[j].index(data[i][j])
+                    clustering.data[i][j] = float(
+                            clustering.mappings[j].index(data[i][j]))
     return clustering
 
 
 
-def naive_distance(data, centroids, classes):
+def _initialize_centroids(clustering):
+    """
+    """
+    for i in range(clustering.k):
+        lo = i * ((len(a) // clustering.k))  # get the index of the low end
+        hi = (i + 1) * (len(a) // clustering.k) - 1  # index of the hi end
+        clustering.centroids[i] = clustering.data[numpy.random.randint(lo, 
+                                        high=hi)]
+    return clustering
+
+
+def naive_update_centroids(clustering):
+    # First, clear out current centroids
+    for i in range(clustering.centroids.shape[0]):
+        clustering.centroids[i] = numpy.zeros(clustering.centroids.shape[1])
+
+    # Now sum across all classes
+    counts = [0] * len(clustering.centroids.shape[0])
+    for i in range(clustering.data.shape[0]):
+        for j in range(clustering.data.shape[1]):
+            clustering.centroids[clustering.predicted[i]][j] += clustering.data[i][j]
+            counts[clustering.predicted[i]] += 1
+
+    # And normalize
+    for i in range(clustering.centroids.shape[0]):
+        for j in range(clustering.centoids.shape[1]):
+            clustering.centroids[i][j] /= counts[i]
+
+
+
+@jit
+def jit_update_centroids(clustering):
+    # First, clear out current centroids
+    for i in range(clustering.centroids.shape[0]):
+        clustering.centroids[i] = numpy.zeros(clustering.centroids.shape[1])
+
+    # Now sum across all classes
+    counts = [0] * len(clustering.centroids.shape[0])
+    for i in range(clustering.data.shape[0]):
+        for j in range(clustering.data.shape[1]):
+            clustering.centroids[clustering.predicted[i]][j] += clustering.data[i][j]
+            counts[clustering.predicted[i]] += 1
+
+    # And normalize
+    for i in range(clustering.centroids.shape[0]):
+        for j in range(clustering.centoids.shape[1]):
+            clustering.centroids[i][j] /= counts[i]
+
+
+def _calc_delta(clustering):
+    for i in range(len(clustering.predicted)):
+        if clustering.predicted[i] < 0
+            clustering.delta += 1
+            clustering.predicted[i] *= -1
+        elif clustering.predicted[i] == sys.maxsize:
+            clustering.delta += 1
+            clustering.predicted[i] = 0
+    return clustering
+
+
+
+@jit
+def _jit_calc_delta(clustering):
+    for i in range(len(clustering.predicted)):
+        if clustering.predicted[i] < 0
+            clustering.delta += 1
+            clustering.predicted[i] *= -1
+        elif clustering.predicted[i] == sys.maxsize:
+            clustering.delta += 1
+            clustering.predicted[i] = 0
+    return clustering
+
+
+
+def naive_assignment(clustering):
     """
     """
     min_dist = sys.maxsize
     min_class = -1
     dist = 0 
-    for i in range(data.shape[0]):
-        for j in range(centroids.shape[0]):
+    for i in range(clustering.data.shape[0]):
+        for j in range(clustering.centroids.shape[0]):
             dist = 0 
-            for k in range(centroids.shape[1]):
-                dist += (data[i][k] - centroids[j][k]) ** 2
+            for k in range(clustering.centroids.shape[1]):
+                dist += (clustering.data[i][k] 
+                        - clustering.centroids[j][k]) ** 2
             dist = dist ** 0.5 
             if dist < min_dist:
                 min_dist = dist
-                min_class = j 
-        classes[i] = min_class
+                min_class = j
+        if clustering.predicted[i] != min_class:
+            if min_class == 0:
+                min_class = sys.maxsize
+            else:
+                min_class *= -1  # mark a change in class as a negative. 
+        clustering.predicted[i] = min_class
         min_dist = sys.maxsize
-    return classes
+    return clustering
 
 
 
-@guvectorize([(int64[:,:], int64[:,:], int64, int64[:])], '(n,p),(q,p),()->(n)')
-def vectorized_distance(data, centroids, maxsize, classes):
+@guvectorize([(float64[:,:], float64[:,:], int64, int64[:])], 
+        '(n,p),(q,p),()->(n)')
+def vectorized_assignment(data, centroids, maxsize, predicted):
     """
     """
     min_dist = maxsize
@@ -216,8 +307,14 @@ def vectorized_distance(data, centroids, maxsize, classes):
             if dist < min_dist:
                 min_dist = dist
                 min_class = j
-        classes[i] = min_class
+        if min_class != predicted[i]:  # Mark a change in class as negative
+            if min_class == 0:       # or sys.maxsize if changed to 0
+                min_class = maxsize
+            else:
+                min_class *= -1
+        predicted[i] = min_class
         min_dist = maxsize
+
 
 
 if __name__== "__main__":
