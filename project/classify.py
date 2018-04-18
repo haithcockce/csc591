@@ -8,7 +8,7 @@ import argparse
 import ipdb
 import os
 import sys
-import numpy
+import numpy as np
 import csv
 from numba import vectorize, guvectorize, int64, float64, jit
 import copy
@@ -38,6 +38,9 @@ class Clustering:
         self.delta = sys.maxsize
         self.max_iterations = 300  # borrowed from scikit.learn's kmeans       
         self.curr_iteration = 0
+        self.row_cnt = 0
+        self.col_cnt = 0
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -61,7 +64,6 @@ def setup_data(clustering):
         print("File '{}' does not exist".format(clustering.data_filename))
         sys.exit(1)
 
-    clustering = _setup_mappings(clustering)
     clustering = _fill_in_data(clustering)
     clustering = _clean_data(clustering)
     clustering = _initialize_centroids(clustering)
@@ -91,42 +93,6 @@ def k_means_clustering(clustering):
 #                               HELPER FUNCTIONS                               #
 ################################################################################
 
-def _setup_mappings(clustering):
-    """Helper Function: Setup an empty mappings list
-
-    The csv data files can be mixed data types (string, float, int), 
-    but naive k-means clustering requires only digits due to using the
-    Euclidean Distance (L1 Norm). Here, we create a mappings list where
-    each entry is either a set or list at each index. The indeces map
-    to column indeces in the csv data file. The n-th entry in mappings
-    will contain either an empty list if the n-th column in the csv data
-    is numeric or an empty set if the n-th column is strings.
-
-    The classifications/labels are disregarded here as they are later 
-    discarded to prevent skewing clustering. 
-
-    Args:
-        clustering (Clustering): See class Clustering. Mappings is not
-            yet filled in 
-
-    Returns:
-        clustering (Clustering): The parameter's mappings attribute is
-            now initialized
-    """
-
-    row = next(csv.reader(open(clustering.data_filename)))
-    for i in range(len(row) - 1):    # ignore the last column (label)
-        if row[i].isdigit():
-            clustering.mappings.append([])
-        else: 
-            try:
-                float(row[i])        # isdecimal() always returns false, but 
-                clustering.mappings.append([])  # this works so whatever
-            except:
-                clustering.mappings.append(set())
-    return clustering
-
-
 
 def _fill_in_data(clustering):
     """Helper Function: Read data from csv and setup mappings
@@ -143,23 +109,25 @@ def _fill_in_data(clustering):
             now are filled in but not yet usable. 
     """
 
-    reader = csv.reader(open(clustering.data_filename))
+    clustering.data = np.genfromtxt(clustering.data_filename, 
+            dtype='str', delimiter=',')
+    clustering.data = np.char.strip(clustering.data)
+    clustering.labels = set(clustering.data[:,-1])
+    clustering.actual = clustering.data[:,-1]
+    clustering.data = np.delete(clustering.data, -1, 1)
+    clustering.predicted = np.full(clustering.data.shape[0], 
+        clustering.data.shape[0])
+    for j in range(clustering.data.shape[1]):
+        try:
+            float(clustering.data[0,j])
+            clustering.mappings.append([])
+        except:
+            clustering.mappings.append(set(clustering.data[:,j]))
 
-    for row in reader:
-        if len(row) == 0:  # Skip potentially empty rows
-            continue
-        for i in range(len(row) - 1):    # -1 because we'll grab classes later
-            if type(clustering.mappings[i]) == set: 
-                clustering.mappings[i].add(row[i])  # add the unique value 
-        clustering.labels.add(row[-1])     # grab the label now
-        clustering.actual.append(row[-1])  # and record actual classification
-        del row[-1]          # Remove classification 
-        clustering.data.append(row)
-    clustering.predicted = [len(clustering.data)] * len(clustering.data)
     return clustering
 
 
-def _clean_data(clustering):
+def _clean_data(cl):
     """Helper Function: Convert data from strings to int/floats
 
     csv's reader reads csvs as strings but the actual values can vary in
@@ -180,26 +148,18 @@ def _clean_data(clustering):
     """
 
     # Convert everything to lists so we have indeces
-    for i in range(len(clustering.mappings)):
-        clustering.mappings[i] = list(clustering.mappings[i])
-    clustering.labels = list(clustering.labels)
+    for i in range(len(cl.mappings)):
+        cl.mappings[i] = list(cl.mappings[i])
+    cl.labels = list(cl.labels)
 
     # Clean data, so convert strings to float (including ints and mappings)
-    for i in range(len(clustering.data)):
-        for j in range(len(clustering.data[i])):
+    for j in range(cl.data.shape[1]):
+        if len(cl.mappings[j]) > 0:
+            cl.data[:, j] = np.array([cl.mappings[j].index(cl.data[i][j]) 
+                                for i in range(cl.data.shape[0])]).astype(str)
+    cl.data = cl.data.astype(float)
 
-            # convert to int if int
-            if clustering.data[i][j].isdigit():
-                clustering.data[i][j] = float(clustering.data[i][j])
-            else:
-                # convert to float if float
-                try:
-                    clustering.data[i][j] = float(clustering.data[i][j])
-                # use index as int replacement
-                except:
-                    clustering.data[i][j] = float(
-                            clustering.mappings[j].index(clustering.data[i][j]))
-    return clustering
+    return cl
 
 
 
@@ -207,10 +167,12 @@ def _initialize_centroids(clustering):
     """
     """
     for i in range(clustering.k):
-        lo = i * (len(clustering.data) // clustering.k)  # get the index of the low end
-        hi = (i + 1) * (len(clustering.data) // clustering.k) - 1  # index of the hi end
-        clustering.centroids.append(clustering.data[numpy.random.randint(
-                                    lo, high=hi)])
+        lo = i * (clustering.data.shape[0] // clustering.k)  # get the index of the low end
+        hi = (i + 1) * (clustering.data.shape[0] // clustering.k) - 1  # index of the hi end
+        clustering.centroids = np.append(clustering.centroids, 
+                clustering.data[np.random.randint(lo, high=hi)])
+    clustering.centroids = np.reshape(clustering.centroids, 
+            (clustering.k, clustering.data.shape[1]))
     return clustering
 
 
