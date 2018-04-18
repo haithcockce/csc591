@@ -20,8 +20,17 @@ def main():
     if args.debug:
         ipdb.set_trace()
     clustering = setup_data(Clustering(args))
-    clustering = k_means_clustering(clustering)
+    optimized_c = copy.deepcopy(clustering)
 
+    start_time = time.time()
+    clustering = naive_k_means_clustering(clustering)
+    print("Time required for naive K-Means Clustering: {}".format(
+        time.time() - start_time))
+
+    start_time = time.time()
+    optimized_c = optimized_k_means_clustering(optimized_c)
+    print("Time required for optimized K-Means Clustering: {}".format(
+        time.time() - start_time))
 
 
 class Clustering:
@@ -69,26 +78,162 @@ def setup_data(clustering):
     clustering = _initialize_centroids(clustering)
     return clustering
 
-def k_means_clustering(clustering):
-    optimized_c = copy.deepcopy(clustering)
-    threshold = int(len(clustering.data) * 0.05)
+def naive_k_means_clustering(clustering):
 
     # Begin naive clustering
-    start_time = time.time()
     clustering = naive_assignment(clustering)
     clustering = naive_update_centroids(clustering)
-    while clustering.delta > threshold and (
+    while (clustering.delta > 0 and 
             clustering.curr_iteration < clustering.max_iterations):
         clustering = naive_assignment(clustering)
         clustering = _calc_delta(clustering)
         clustering = naive_update_centroids(clustering)
         clustering.curr_iteration += 1
-    # TODO
-    # - time both
-    # - loop naive and gpu until delta < % of total records 
-    #   (or 300 max like scikit)
-    # - need to loop assignment and update clustering
-    
+
+
+
+def optimized_k_means_clustering(clu):
+
+    # Begin naive clustering
+    vectorized_assignment(clu.data, clu.centroids, 
+            sys.maxsize, clu.predicted)
+    # First, clear out current centroids. Can't pass in np into jit functions
+    clu.centroids = np.zeros((clu.centroids.shape[0], clu.centroids.shape[1]))
+    clu = jit_update_centroids(clu)
+    while (clu.delta > 0 and 
+            clu.curr_iteration < clu.max_iterations):
+        vectorized_assignment(clu.data, clu.centroids, 
+                sys.maxsize, clu.predicted)
+        clu = _jit_calc_delta(clu, sys.maxsize)
+        clu.centroids = np.zeros(
+                (clu.centroids.shape[0], clu.centroids.shape[1]))
+        clu = jit_update_centroids(clu)
+        clu.curr_iteration += 1
+
+
+def naive_assignment(clustering):
+    """
+    """
+    min_dist = sys.maxsize
+    min_class = -1
+    dist = 0 
+    for i in range(clustering.data.shape[0]):
+        for j in range(clustering.centroids.shape[0]):
+            dist = 0 
+            for k in range(clustering.centroids.shape[1]):
+                dist += (clustering.data[i][k] 
+                        - clustering.centroids[j][k]) ** 2
+            dist = dist ** 0.5 
+            if dist < min_dist:
+                min_dist = dist
+                min_class = j
+
+        # Mark a change to the class. Set to maxsize marker value if changed to
+        # 0, negative if changed to non-zero, or just assign it if it wasn't
+        # assigned anything prior (so size of data)
+        if (clustering.predicted[i] != clustering.data.shape[0] and 
+                min_class != clustering.predicted[i]):
+            if min_class == 0:
+                min_class = sys.maxsize
+            else:
+                min_class *= -1
+        clustering.predicted[i] = min_class
+        min_dist = sys.maxsize
+    return clustering
+
+
+
+@guvectorize([(float64[:,:], float64[:,:], int64, int64[:])], 
+        '(n,p),(q,p),()->(n)')
+def vectorized_assignment(data, centroids, maxsize, predicted):
+    """
+    """
+    min_dist = maxsize
+    min_class = -1
+    dist = 0
+    for i in range(data.shape[0]):
+        for j in range(centroids.shape[0]):
+            dist = 0
+            for k in range(centroids.shape[1]):
+                dist += (data[i][k] - centroids[j][k]) ** 2
+            dist = dist ** 0.5
+            if dist < min_dist:
+                min_dist = dist
+                min_class = j
+        
+        # Mark a change to the class. Set to maxsize marker value if changed to
+        # 0, negative if changed to non-zero, or just assign it if it wasn't
+        # assigned anything prior (so size of data)
+        if predicted[i] != data.shape[0] and min_class != predicted[i]: 
+            if min_class == 0:
+                min_class = maxsize
+            else:
+                min_class *= -1
+        predicted[i] = min_class
+        min_dist = maxsize
+
+
+
+def _calc_delta(clustering):
+    clustering.delta = 0
+    for i in range(clustering.predicted.shape[0]):
+        if clustering.predicted[i] < 0:
+            clustering.delta += 1
+            clustering.predicted[i] *= -1
+        elif clustering.predicted[i] == sys.maxsize:
+            clustering.delta += 1
+            clustering.predicted[i] = 0
+    return clustering
+
+
+
+@jit
+def _jit_calc_delta(clustering, maxsize):
+    clustering.delta = 0
+    for i in range(clustering.predicted.shape[0]):
+        if clustering.predicted[i] < 0:
+            clustering.delta += 1
+            clustering.predicted[i] *= -1
+        elif clustering.predicted[i] == maxsize:
+            clustering.delta += 1
+            clustering.predicted[i] = 0
+    return clustering
+
+
+
+def naive_update_centroids(clustering):
+    # First, clear out current centroids
+    clustering.centroids = np.zeros(
+            (clustering.centroids.shape[0], clustering.centroids.shape[1]))
+
+    # Now sum across all classes
+    counts = np.zeros(clustering.centroids.shape[0])
+    for i in range(clustering.data.shape[0]):
+        clustering.centroids[clustering.predicted[i]] += clustering.data[i]
+        counts[clustering.predicted[i]] += 1
+
+    # And normalize
+    for i in range(clustering.centroids.shape[0]):
+        clustering.centroids[i] /= counts[i]
+    return clustering
+
+
+
+@jit
+def jit_update_centroids(clustering):
+
+    # Now sum across all classes
+    counts = [0] * clustering.centroids.shape[0]
+    for i in range(clustering.data.shape[0]):
+        clustering.centroids[clustering.predicted[i]] += clustering.data[i]
+        counts[clustering.predicted[i]] += 1
+
+    # And normalize
+    for i in range(clustering.centroids.shape[0]):
+        clustering.centroids[i] /= counts[i]
+    return clustering
+
+
 ################################################################################
 #                               HELPER FUNCTIONS                               #
 ################################################################################
@@ -175,134 +320,6 @@ def _initialize_centroids(clustering):
             (clustering.k, clustering.data.shape[1]))
     return clustering
 
-
-def naive_update_centroids(clustering):
-    # First, clear out current centroids
-    for i in range(len(clustering.centroids)):
-        clustering.centroids[i] = [0] * len(clustering.data[0])
-
-    # Now sum across all classes
-    counts = [0] * len(clustering.centroids)
-    for i in range(len(clustering.data)):
-        for j in range(len(clustering.data[0])):
-            clustering.centroids[clustering.predicted[i]][j] += clustering.data[i][j]
-        counts[clustering.predicted[i]] += 1
-
-    # And normalize
-    for i in range(len(clustering.centroids)):
-        for j in range(len(clustering.centroids[0])):
-            clustering.centroids[i][j] /= counts[i]
-    return clustering
-
-
-
-@jit
-def jit_update_centroids(clustering):
-    # First, clear out current centroids
-    for i in range(len(clustering.centroids)):
-        clustering.centroids[i] = [0] * len(clustering.data[0])
-
-    # Now sum across all classes
-    counts = [0] * len(clustering.centroids)
-    for i in range(len(clustering.data)):
-        for j in range(len(clustering.data[0])):
-            clustering.centroids[clustering.predicted[i]][j] += clustering.data[i][j]
-            counts[clustering.predicted[i]] += 1
-
-    # And normalize
-    for i in range(len(clustering.centroids)):
-        for j in range(len(clustering.centroids[0])):
-            clustering.centroids[i][j] /= counts[i]
-    return clustering
-
-
-def _calc_delta(clustering):
-    clustering.delta = 0
-    for i in range(len(clustering.predicted)):
-        if clustering.predicted[i] < 0:
-            clustering.delta += 1
-            clustering.predicted[i] *= -1
-        elif clustering.predicted[i] == sys.maxsize:
-            clustering.delta += 1
-            clustering.predicted[i] = 0
-    return clustering
-
-
-
-@jit
-def _jit_calc_delta(clustering):
-    clustering.delta = 0
-    for i in range(len(clustering.predicted)):
-        if clustering.predicted[i] < 0:
-            clustering.delta += 1
-            clustering.predicted[i] *= -1
-        elif clustering.predicted[i] == sys.maxsize:
-            clustering.delta += 1
-            clustering.predicted[i] = 0
-    return clustering
-
-
-
-def naive_assignment(clustering):
-    """
-    """
-    min_dist = sys.maxsize
-    min_class = -1
-    dist = 0 
-    for i in range(len(clustering.data)):
-        for j in range(len(clustering.centroids)):
-            dist = 0 
-            for k in range(len(clustering.centroids[0])):
-                dist += (clustering.data[i][k] 
-                        - clustering.centroids[j][k]) ** 2
-            dist = dist ** 0.5 
-            if dist < min_dist:
-                min_dist = dist
-                min_class = j
-
-        # Mark a change to the class. Set to maxsize marker value if changed to
-        # 0, negative if changed to non-zero, or just assign it if it wasn't
-        # assigned anything prior (so size of data)
-        if clustering.predicted[i] != len(clustering.data) and (
-                min_class != clustering.predicted[i]):
-            if min_class == 0:
-                min_class = sys.maxsize
-            else:
-                min_class *= -1
-        clustering.predicted[i] = min_class
-        min_dist = sys.maxsize
-    return clustering
-
-
-
-@guvectorize([(float64[:,:], float64[:,:], int64, int64[:])], 
-        '(n,p),(q,p),()->(n)')
-def vectorized_assignment(data, centroids, maxsize, predicted):
-    """
-    """
-    min_dist = maxsize
-    min_class = -1
-    dist = 0
-    for i in range(len(data)):
-        for j in range(len(centroids)):
-            dist = 0
-            for k in range(len(centroids[0])):
-                dist += (data[i][k] - centroids[j][k]) ** 2
-            dist = dist ** 0.5
-            if dist < min_dist:
-                min_dist = dist
-                min_class = j
-        
-        # Mark a change to the class. Set to maxsize marker value if changed to
-        # 0, negative if changed to non-zero, or just assign it if it wasn't
-        # assigned anything prior (so size of data)
-        if predicted[i] != len(data) and min_class != predicted[i]: 
-            if min_class == 0:
-                min_class = maxsize
-            else:
-                min_class *= -1
-        predicted[i] = min_class
-        min_dist = maxsize
 
 
 
