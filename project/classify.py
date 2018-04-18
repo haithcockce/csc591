@@ -43,12 +43,10 @@ class Clustering:
         self.actual = []
         self.data_filename = args.data_filename
         self.centroids = []
-        self.offload = args.offload
         self.delta = sys.maxsize
         self.max_iterations = 300  # borrowed from scikit.learn's kmeans       
         self.curr_iteration = 0
-        self.row_cnt = 0
-        self.col_cnt = 0
+
 
 
 def parse_args():
@@ -65,7 +63,10 @@ def parse_args():
 
 
 def setup_data(clustering):
-    """
+    """Initializes and prepares data for clustering algorithms
+
+    Relies on helper function to read data from a csv file, clean the
+    data to something usable for clustering, and choose initial means.
     """
 
     # Check if data file exists
@@ -78,8 +79,11 @@ def setup_data(clustering):
     clustering = _initialize_centroids(clustering)
     return clustering
 
-def naive_k_means_clustering(clustering):
 
+
+def naive_k_means_clustering(clustering):
+    """Performs K-Means clustering 
+    """
     # Begin naive clustering
     clustering = naive_assignment(clustering)
     clustering = naive_update_centroids(clustering)
@@ -89,6 +93,7 @@ def naive_k_means_clustering(clustering):
         clustering = _calc_delta(clustering)
         clustering = naive_update_centroids(clustering)
         clustering.curr_iteration += 1
+    return clustering 
 
 
 
@@ -109,6 +114,8 @@ def optimized_k_means_clustering(clu):
                 (clu.centroids.shape[0], clu.centroids.shape[1]))
         clu = jit_update_centroids(clu)
         clu.curr_iteration += 1
+    return clu
+
 
 
 def naive_assignment(clustering):
