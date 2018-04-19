@@ -15,25 +15,40 @@ import copy
 import time
 
 
+
 def main():
     args = parse_args()
     if args.debug:
         ipdb.set_trace()
+    if not args.offload and not args.naive:
+        print("Either '--gpu' or '--naive' (or both) must be supplied")
+        sys.exit(1)
+
     clustering = setup_data(Clustering(args))
-    optimized_c = copy.deepcopy(clustering)
+    if args.offload:
+        optimized_c = copy.deepcopy(clustering)
 
-    start_time = time.time()
-    clustering = naive_k_means_clustering(clustering)
-    print("Time required for naive K-Means Clustering: {}".format(
-        time.time() - start_time))
+        start_time = time.time()
+        optimized_c = optimized_k_means_clustering(optimized_c)
+        print("Time required for optimized K-Means Clustering: {}".format(
+            time.time() - start_time))
+    if args.naive:
+        start_time = time.time()
+        clustering = naive_k_means_clustering(clustering)
+        print("Time required for naive K-Means Clustering: {}".format(
+            time.time() - start_time))
 
-    start_time = time.time()
-    optimized_c = optimized_k_means_clustering(optimized_c)
-    print("Time required for optimized K-Means Clustering: {}".format(
-        time.time() - start_time))
 
 
 class Clustering:
+    """Maintains state of k-means clustering algorithm
+
+    Clustering manages several structures including mappings between
+    classifications and numbers (in order to perform distance
+    calculations), the data itself, predicted classes, count of
+    class changes between iterations of assignment and updates, etc. 
+    """
+
     def __init__(self, args):
         self.mappings = []
         self.data = []
@@ -43,63 +58,126 @@ class Clustering:
         self.actual = []
         self.data_filename = args.data_filename
         self.centroids = []
-        self.offload = args.offload
         self.delta = sys.maxsize
         self.max_iterations = 300  # borrowed from scikit.learn's kmeans       
         self.curr_iteration = 0
-        self.row_cnt = 0
-        self.col_cnt = 0
+        self.offload = args.offload
+        self.naive = args.naive
+            
+
 
 
 def parse_args():
+    """Pulls arguments passed to program into an argparse object for use
+
+    Args:
+        -
+
+    Returns:
+        argparse object: object with attributes holding the values of 
+                         the passed in parameters
+    """
+
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--data', dest='data_filename', 
             default='data/iris.data', help='Defaults to iris')
-    parser.add_argument('-k', '--means', dest='k', required=True,
+    parser.add_argument('-k', '--means', dest='k', default=3,
             help='Centroid count. Must be equal to classes', type=int)
     parser.add_argument('--debug', dest='debug', action='store_true',
             help='Start tracing')
-    parser.add_argument('--g', '--gpu', dest='offload',
-            action='store_true', help='Offload to GPU')
+    parser.add_argument('-g', '--gpu', dest='offload', action='store_true', 
+            help='Offload to GPU')
+    parser.add_argument('-n', '--naive', dest='naive', action='store_true', 
+            help='Run on CPUs')
+
     return parser.parse_args()
 
 
 def setup_data(clustering):
-    """
+    """Initializes and prepares data for clustering algorithms
+
+    Relies on helper function to read data from a csv file, clean the
+    data to something usable for clustering, and choose initial means.
+
+    Args:
+        clustering (Clustering): nearly empty object maintaining state 
+                                 of clustering algorithm. Has some 
+                                 fields filled from parameters
+    Returns:
+        Clustering object: object ready to fully perform kmeans on
     """
 
-    # Check if data file exists
+    # Check if data file exists and exit if not
     if not os.path.exists(clustering.data_filename):
         print("File '{}' does not exist".format(clustering.data_filename))
         sys.exit(1)
 
+    # Setup the clustering object for use
     clustering = _fill_in_data(clustering)
     clustering = _clean_data(clustering)
     clustering = _initialize_centroids(clustering)
     return clustering
 
+
+
 def naive_k_means_clustering(clustering):
+    """Performs K-Means clustering 
+
+    The core of the k-means clustering algorithm with no offloading. 
+    Effectively a do-while loop is emulated by first assigning data to
+    centroids and then update the centroids (means). This is repeated
+    until either the means converge to a stable value or 300 iterations
+    complete. Though unlikely, centroids can continually migrate so a 
+    hard limit is imposed on amount of iterations. 
+
+    Args:
+        clustering (Clustering): Object maintaining state of
+                                 clustering algorithm to be performed on
+    Returns:
+        Clustering object: after k-means clustering is performed on it 
+    """
 
     # Begin naive clustering
     clustering = naive_assignment(clustering)
     clustering = naive_update_centroids(clustering)
+    
+    # Until means stabalize or we have done 300 iterations, continue 
     while (clustering.delta > 0 and 
             clustering.curr_iteration < clustering.max_iterations):
         clustering = naive_assignment(clustering)
         clustering = _calc_delta(clustering)
         clustering = naive_update_centroids(clustering)
         clustering.curr_iteration += 1
+    return clustering 
 
 
 
 def optimized_k_means_clustering(clu):
+    """Performs K-Means clustering with GPU offloading
+
+    The core of the k-means clustering algorithm with offloading. 
+    Effectively a do-while loop is emulated by first assigning data to
+    centroids and then update the centroids (means). This is repeated
+    until either the means converge to a stable value or 300 iterations
+    complete. Though unlikely, centroids can continually migrate so a 
+    hard limit is imposed on amount of iterations. 
+
+    Args:
+        clustering (Clustering): Object maintaining state of
+                                 clustering algorithm to be performed on
+    Returns:
+        Clustering object: after k-means clustering is performed on it 
+    """
 
     # Begin naive clustering
     vectorized_assignment(clu.data, clu.centroids, 
             sys.maxsize, clu.predicted)
+
     # First, clear out current centroids. Can't pass in np into jit functions
     clu.centroids = np.zeros((clu.centroids.shape[0], clu.centroids.shape[1]))
     clu = jit_update_centroids(clu)
+
+    # Until means stabalize or until 300 iterations, continue 
     while (clu.delta > 0 and 
             clu.curr_iteration < clu.max_iterations):
         vectorized_assignment(clu.data, clu.centroids, 
@@ -109,21 +187,40 @@ def optimized_k_means_clustering(clu):
                 (clu.centroids.shape[0], clu.centroids.shape[1]))
         clu = jit_update_centroids(clu)
         clu.curr_iteration += 1
+    return clu
+
 
 
 def naive_assignment(clustering):
+    """Assigns records to centroids/means
+
+    The assignment step to k-means clustering. For each data point, 
+    get the distance to each mean and classify as the "closest" one. 
+    Class changes are marked with either the negative of the new class
+    or sys.maxsize if the new class is 0. 
+
+    Args:
+        clustering (Clustering): Object maintaining state of clustering
+                                 algorithm
+    Returns:
+        clustering object with records having newly assigned centroids
     """
-    """
+
     min_dist = sys.maxsize
     min_class = -1
     dist = 0 
+
+    # For each data point
     for i in range(clustering.data.shape[0]):
+        # For each centroid
         for j in range(clustering.centroids.shape[0]):
+            # Calculate the distance between ith record and jth centroid
             dist = 0 
             for k in range(clustering.centroids.shape[1]):
                 dist += (clustering.data[i][k] 
                         - clustering.centroids[j][k]) ** 2
             dist = dist ** 0.5 
+            # and track this centroid and class as min distance
             if dist < min_dist:
                 min_dist = dist
                 min_class = j
@@ -146,17 +243,34 @@ def naive_assignment(clustering):
 @guvectorize([(float64[:,:], float64[:,:], int64, int64[:])], 
         '(n,p),(q,p),()->(n)')
 def vectorized_assignment(data, centroids, maxsize, predicted):
+    """Assigns records to centroids/means with offloading
+
+    The assignment step to k-means clustering. For each data point, 
+    get the distance to each mean and classify as the "closest" one. 
+    Class changes are marked with either the negative of the new class
+    or sys.maxsize if the new class is 0. 
+
+    Args:
+        clustering (Clustering): Object maintaining state of clustering
+                                 algorithm
+    Returns:
+        clustering object with records having newly assigned centroids
     """
-    """
+
     min_dist = maxsize
     min_class = -1
     dist = 0
+
+    # For each data point
     for i in range(data.shape[0]):
+        # For each centroid
         for j in range(centroids.shape[0]):
+            # Calculate the distance between ith record and jth centroid
             dist = 0
             for k in range(centroids.shape[1]):
                 dist += (data[i][k] - centroids[j][k]) ** 2
             dist = dist ** 0.5
+            # and track this centroid and class as min distance
             if dist < min_dist:
                 min_dist = dist
                 min_class = j
@@ -175,11 +289,28 @@ def vectorized_assignment(data, centroids, maxsize, predicted):
 
 
 def _calc_delta(clustering):
+    """Calculate the amount of class changes for an assignment iteration
+
+    Parses the newly predicted class for an iteration of the kmeans and
+    sums changes from prior class via summing negatives or sys.maxint
+    as negative represent a change to the new absolutely value of the
+    class or 0 if sys.maxint. Changes the class to the real value after
+    accounting. 
+
+    Args:
+        clustering (Clustering): object keeping track of clustering 
+                                 algorithm that need to parse predicted
+    Returns:
+        clustering object with calculated deltas and converted
+        predicted classes 
+    """
     clustering.delta = 0
     for i in range(clustering.predicted.shape[0]):
+        # Negative means class change to the current value
         if clustering.predicted[i] < 0:
             clustering.delta += 1
             clustering.predicted[i] *= -1
+        # Sys.maxsize means change to 0
         elif clustering.predicted[i] == sys.maxsize:
             clustering.delta += 1
             clustering.predicted[i] = 0
@@ -187,8 +318,22 @@ def _calc_delta(clustering):
 
 
 
-#@jit
 def _jit_calc_delta(clustering, maxsize):
+    """Calculate the amount of class changes for an assignment iteration
+
+    Parses the newly predicted class for an iteration of the kmeans and
+    sums changes from prior class via summing negatives or sys.maxint
+    as negative represent a change to the new absolutely value of the
+    class or 0 if sys.maxint. Changes the class to the real value after
+    accounting. 
+
+    Args:
+        clustering (Clustering): object keeping track of clustering 
+                                 algorithm that need to parse predicted
+    Returns:
+        clustering object with calculated deltas and converted
+        predicted classes 
+    """
     clustering.delta = 0
     for i in range(clustering.predicted.shape[0]):
         if clustering.predicted[i] < 0:
@@ -219,7 +364,6 @@ def naive_update_centroids(clustering):
 
 
 
-#@jit
 def jit_update_centroids(clustering):
 
     # Now sum across all classes
