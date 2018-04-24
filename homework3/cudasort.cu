@@ -3,12 +3,15 @@
 #include <time.h>
 #include <assert.h>
 #include <sys/time.h>
+#include "cuPrintf.cu" /* For debugging */
+#include "cuPrintf.cuh" /* For debugging */
 
 #define THREADS 512
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+
 
 __global__ void cudasort(float *data, float *temp, int num_of_elements, 
         int subarr_size) {
@@ -24,6 +27,7 @@ __global__ void cudasort(float *data, float *temp, int num_of_elements,
      * so don't do anything when ith subarray is more than
      * total subarrays */
     index = threadIdx.x;
+    cuPrintf("Index: %d\n", index);
     left_lower = index * subarr_size;
     if(left_lower >= num_of_elements) {
         return;
@@ -82,7 +86,6 @@ int cuda_sort(int num_of_elements, float *data)
      * tree. */
     for(subarr_size = 2; subarr_size <= num_of_elements; 
             subarr_size = subarr_size * 2) {
-        printf("%d Hidy-ho kids I'm mister Hanky\n", subarr_size); 
 
         /* Copy stuff to cuda buffers */
         cudaMemcpy(cuda_data, data, size_in_bytes, cudaMemcpyHostToDevice);
@@ -94,6 +97,11 @@ int cuda_sort(int num_of_elements, float *data)
 
         /* Read data from GPU (either partially or fully sorted) */
         cudaMemcpy(data, cuda_data, size_in_bytes, cudaMemcpyHostToDevice);
+        int i;
+        for(i = 0; i < num_of_elements; i++) {
+            printf("%f, ", data[i]);
+        }
+        printf("\n");
     }
 
     /* Clean up */
