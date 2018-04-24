@@ -1,0 +1,55 @@
+data/iris.jit-results awk '{ if(/optimized/){ sum += $NF; count += 1 }} END { print sum " " sum / count " " count }'
+  naive: 
+    total time: 1.40775
+    records:    101
+    average:    0.0139382
+    variance:   3.71195e-05
+  optimized:
+    total time: 38.8509
+    records:    101
+    average:    0.384663
+    variance:   1.06436e-05
+
+data/iris-nojit.results: awk '{ if(/naive/){sum += ($NF - 0.0139336); count +=1}} END {print (sum * sum)/count " " count}' data/iris-nojit.results
+  naive:
+    total time: 1.40729
+    records:    101
+    average:    0.0139336
+    variance:   3.91792e-05
+  optimized:
+    total time: 0.184647
+    records:    101
+    avreage:    0.00182819
+    variance:   7.21612e-07
+
+data/adult.results: awk '{ if(/naive/){ sum += $NF; count += 1 }} END { print sum " " sum / count " " count }' data/adult.results
+  naive: 
+    total time: 2028.21
+    records:    101
+    average:    20.0812
+    variance:   19.5426
+  optimized:
+    total time: 154.252
+    records:    101
+    average:    1.52725
+    variance:   0.114794
+
+data/poker-naive.results: 
+  Assignment:
+    records:    696
+    average:    86.4707
+    variance:   4.66993
+  Update:
+    records:    696
+    average:    1.85801
+    variance:   1.89793e-06
+
+data/poker-opt.results: awk '/Assignment took/ {sum += $3; count += 1} END {print sum " " sum / count " " count}'
+  Assignment:
+    records:    9168
+    average:    0.0908112
+    variance:   2.46556e-07
+  Update: 
+    records:    9168
+    average:    0.510835
+    variance:   0.0029389

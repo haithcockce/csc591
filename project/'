@@ -148,12 +148,8 @@ def naive_k_means_clustering(clustering):
         start_time = time.time()
         clustering = naive_assignment(clustering)
         clustering = _calc_delta(clustering)
-        update_time = time.time()
-        vprint('Assignment took {} seconds. Updating Centroids...'.format(
-            update_time - start_time), clustering.verbose)
+        vprint('Updating Centroids...', clustering.verbose)
         clustering = naive_update_centroids(clustering)
-        vprint('Updating centroids took {} seconds'.format(time.time() 
-            - update_time), clustering.verbose)
         clustering.curr_iteration += 1
         vprint('Iteration {} took {} seconds'.format(
             clustering.curr_iteration, time.time() - start_time), 
@@ -193,14 +189,10 @@ def optimized_k_means_clustering(clu):
         start_time = time.time()
         vectorized_assignment(clu.data, clu.centroids, 
                 sys.maxsize, clu.predicted)
-        update_time = time.time()
-        vprint('Assignment took {} seconds. Updating Centroids...'.format(
-            update_time - start_time), clu.verbose)
         clu = _jit_calc_delta(clu, sys.maxsize)
         clu.centroids = np.zeros(
                 (clu.centroids.shape[0], clu.centroids.shape[1]))
-        vprint('Updating centroids took {} seconds'.format(time.time() 
-            - update_time), clu.verbose)
+        vprint('Updating Centroids...', clu.verbose)
         clu = jit_update_centroids(clu)
         clu.curr_iteration += 1
         vprint('Iteration {} took {} seconds'.format(
@@ -335,7 +327,7 @@ def _calc_delta(clustering):
 
 
 
-#@jit
+@jit
 def _jit_calc_delta(clustering, maxsize):
     """Calculate the amount of class changes for an assignment iteration
 
@@ -383,7 +375,7 @@ def naive_update_centroids(clustering):
 
 
 
-#@jit
+@jit
 def jit_update_centroids(clustering):
 
     # Now sum across all classes
