@@ -62,6 +62,7 @@ __global__ void cudasort(float *data, float *temp, int num_of_elements,
      //   cuPrintf("data[%d] = %f, temp[%d] = %f\n", index, data[index],
      //           index, temp[index]);
     }
+    __syncthreads();
 
 
 }
@@ -107,10 +108,10 @@ int cuda_sort(int num_of_elements, float *data)
      * so instead mergesort is then iterative. Each loop iteration is the 
      * next up recursion level starting with the leaf nodes of the recursion
      * tree. */
-    //for(subarr_size = 2; subarr_size <= num_of_elements; 
-    //        subarr_size = subarr_size * 2) {
-    int i;
-    for(i = 0; i < iterations; i++) {
+    for(subarr_size = 2; subarr_size <= num_of_elements; 
+            subarr_size = subarr_size * 2) {
+    //int i;
+    //for(i = 0; i < iterations; i++) {
 
         /* Copy stuff to cuda buffers */
         cudaMemcpy(cuda_data, data, size_in_bytes, cudaMemcpyHostToDevice);
