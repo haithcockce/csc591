@@ -27,6 +27,7 @@ __global__ void cudasort(float *data, float *temp, int num_of_elements,
      * so don't do anything when ith subarray is more than
      * total subarrays */
     index = threadIdx.x;
+    //cuPrintf("Index: %d, subarr_size: %d\n", index, subarr_size);
     left_lower = index * subarr_size;
     if(left_lower >= num_of_elements) {
         return;
@@ -72,6 +73,24 @@ int cuda_sort(int num_of_elements, float *data)
 
     float *temp;
     int subarr_size;
+    int iterations = 0;
+    int temp_a = num_of_elements;
+    do {
+        temp_a = temp_a / 2;
+        iterations = iterations + 1;
+    } while(temp_a > 1);
+    int subarr_sizes[iterations];
+    temp_a = num_of_elements;
+    int temp_b = iterations;
+    do {
+        temp_b = temp_b - 1;
+        subarr_sizes[temp_b] = temp_a;
+        temp_a = temp_a / 2;
+    } while(temp_a > 1);
+    
+
+
+
     unsigned long size_in_bytes = num_of_elements * sizeof(float);
 
     /* Create buffers for initial data and temp buffer */
@@ -81,22 +100,24 @@ int cuda_sort(int num_of_elements, float *data)
     memset(temp, 0, size_in_bytes);
 
 
-    //cudaPrintfInit ();  /* For debugging */
+    cudaPrintfInit ();  /* For debugging */
 
 
     /* Merge sort is recursive, but OpenCL doesn't allow recursion (janky)
      * so instead mergesort is then iterative. Each loop iteration is the 
      * next up recursion level starting with the leaf nodes of the recursion
      * tree. */
-    for(subarr_size = 2; subarr_size <= num_of_elements; 
-            subarr_size = subarr_size * 2) {
+    //for(subarr_size = 2; subarr_size <= num_of_elements; 
+    //        subarr_size = subarr_size * 2) {
+    int i;
+    for(i = 0; i < iterations; i++) {
 
         /* Copy stuff to cuda buffers */
         cudaMemcpy(cuda_data, data, size_in_bytes, cudaMemcpyHostToDevice);
         cudaMemcpy(cuda_temp, temp, size_in_bytes, cudaMemcpyHostToDevice);
 
         /* Execute kernel */
-        cudasort<<<1, (num_of_elements/subarr_size)>>>(cuda_data, cuda_temp, 
+        cudasort<<<1, num_of_elements>>>(cuda_data, cuda_temp, 
                 num_of_elements, subarr_size);
 
         /* Read data from GPU (either partially or fully sorted) */
@@ -106,8 +127,8 @@ int cuda_sort(int num_of_elements, float *data)
     }
 
     /* Clean up */
-    //cudaPrintfDisplay (stdout, true);  /* For debugging */
-    //cudaPrintfEnd ();  /* For debugging */ 
+        cudaPrintfDisplay (stdout, true);  /* For debugging */
+    cudaPrintfEnd ();  /* For debugging */ 
 
     free(temp);
     cudaFree(cuda_data);
