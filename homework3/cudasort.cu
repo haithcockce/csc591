@@ -27,7 +27,6 @@ __global__ void cudasort(float *data, float *temp, int num_of_elements,
      * so don't do anything when ith subarray is more than
      * total subarrays */
     index = threadIdx.x;
-    cuPrintf("Index: %d\n", index);
     left_lower = index * subarr_size;
     if(left_lower >= num_of_elements) {
         return;
@@ -59,6 +58,8 @@ __global__ void cudasort(float *data, float *temp, int num_of_elements,
     /* Copy the semi-sorted temp content back to the original data set */
     for(index = threadIdx.x * subarr_size; index <= right_upper; index++) {
         data[index] = temp[index];
+     //   cuPrintf("data[%d] = %f, temp[%d] = %f\n", index, data[index],
+     //           index, temp[index]);
     }
 
 
@@ -80,6 +81,9 @@ int cuda_sort(int num_of_elements, float *data)
     memset(temp, 0, size_in_bytes);
 
 
+    //cudaPrintfInit ();  /* For debugging */
+
+
     /* Merge sort is recursive, but OpenCL doesn't allow recursion (janky)
      * so instead mergesort is then iterative. Each loop iteration is the 
      * next up recursion level starting with the leaf nodes of the recursion
@@ -92,19 +96,19 @@ int cuda_sort(int num_of_elements, float *data)
         cudaMemcpy(cuda_temp, temp, size_in_bytes, cudaMemcpyHostToDevice);
 
         /* Execute kernel */
-        cudasort<<<1, num_of_elements>>>(cuda_data, cuda_temp, 
+        cudasort<<<1, (num_of_elements/subarr_size)>>>(cuda_data, cuda_temp, 
                 num_of_elements, subarr_size);
 
         /* Read data from GPU (either partially or fully sorted) */
-        cudaMemcpy(data, cuda_data, size_in_bytes, cudaMemcpyHostToDevice);
-        int i;
-        for(i = 0; i < num_of_elements; i++) {
-            printf("%f, ", data[i]);
-        }
-        printf("\n");
+        cudaMemcpy(data, cuda_data, size_in_bytes, cudaMemcpyDeviceToHost);
+        cudaThreadSynchronize();
+
     }
 
     /* Clean up */
+    //cudaPrintfDisplay (stdout, true);  /* For debugging */
+    //cudaPrintfEnd ();  /* For debugging */ 
+
     free(temp);
     cudaFree(cuda_data);
     cudaFree(cuda_temp);
