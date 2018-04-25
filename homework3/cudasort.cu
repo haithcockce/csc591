@@ -16,7 +16,8 @@ extern "C"
 __global__ void cudasort(float *data, float *temp, int num_of_elements, 
         int subarr_size) {
 
-    unsigned long index;          /* index of thread */
+    unsigned long index;          /* index when copying between temp and data*/
+    unsigned long global_index;   /* index of thread */
     unsigned long left_lower;     /* start of left subarray */
     unsigned long mid;            /* end of left subarray */
     unsigned long right_upper;    /* end of right subarray */
@@ -26,9 +27,8 @@ __global__ void cudasort(float *data, float *temp, int num_of_elements,
     /* ith work item works on ith and ith + 1 subarrays,
      * so don't do anything when ith subarray is more than
      * total subarrays */
-    index = threadIdx.x;
-    //cuPrintf("Index: %d, subarr_size: %d\n", index, subarr_size);
-    left_lower = index * subarr_size;
+    global_index = (blockIdx.x * gridDim.x) + (blockIdx.y * gridDim.y) + threadIdx.x;
+    left_lower = global_index * subarr_size;
     if(left_lower >= num_of_elements) {
         return;
     }
@@ -36,7 +36,7 @@ __global__ void cudasort(float *data, float *temp, int num_of_elements,
     /* Mergesort works on A[p..q] and A[q+1..r], so calculate p == left_lower,
      * q = mid, q+1 = mid + 1 = right_lower, and r = right_upper
      */
-    right_upper = left_lower + subarr_size - 1;
+    right_upper = (left_lower + subarr_size - 1) >= (num_of_elements - 1) ? (num_of_elements - 1) : (left_lower + subarr_size - 1) ;
     mid = (left_lower + right_upper) / 2;
     right_lower = mid + 1;
 
@@ -56,16 +56,14 @@ __global__ void cudasort(float *data, float *temp, int num_of_elements,
         }
     }
 
-    /* Copy the semi-sorted temp content back to the original data set */
-    for(index = threadIdx.x * subarr_size; index <= right_upper; index++) {
-        data[index] = temp[index];
-     //   cuPrintf("data[%d] = %f, temp[%d] = %f\n", index, data[index],
-     //           index, temp[index]);
-    }
     __syncthreads();
-
+    /* Copy the semi-sorted temp content back to the original data set */
+    for(index = global_index * subarr_size; index <= right_upper; index++) {
+        data[index] = temp[index];
+    }
 
 }
+
 
 int cuda_sort(int num_of_elements, float *data)
 {
@@ -74,22 +72,6 @@ int cuda_sort(int num_of_elements, float *data)
 
     float *temp;
     int subarr_size;
-    int iterations = 0;
-    int temp_a = num_of_elements;
-    do {
-        temp_a = temp_a / 2;
-        iterations = iterations + 1;
-    } while(temp_a > 1);
-    int subarr_sizes[iterations];
-    temp_a = num_of_elements;
-    int temp_b = iterations;
-    do {
-        temp_b = temp_b - 1;
-        subarr_sizes[temp_b] = temp_a;
-        temp_a = temp_a / 2;
-    } while(temp_a > 1);
-    
-
 
 
     unsigned long size_in_bytes = num_of_elements * sizeof(float);
@@ -108,23 +90,26 @@ int cuda_sort(int num_of_elements, float *data)
      * so instead mergesort is then iterative. Each loop iteration is the 
      * next up recursion level starting with the leaf nodes of the recursion
      * tree. */
+    //int i;
     for(subarr_size = 2; subarr_size <= num_of_elements; 
             subarr_size = subarr_size * 2) {
-    //int i;
-    //for(i = 0; i < iterations; i++) {
 
+        dim3 dimGrid(256, 256);
+        //dim3 dimBlock(512, 1);
         /* Copy stuff to cuda buffers */
         cudaMemcpy(cuda_data, data, size_in_bytes, cudaMemcpyHostToDevice);
         cudaMemcpy(cuda_temp, temp, size_in_bytes, cudaMemcpyHostToDevice);
 
         /* Execute kernel */
-        cudasort<<<1, num_of_elements>>>(cuda_data, cuda_temp, 
-                num_of_elements, subarr_size);
+        //cudasort<<<1, num_of_elements>>>(cuda_data, cuda_temp, 
+        //        num_of_elements, subarr_size);
+        cudasort<<<dimGrid, 512>>>(cuda_data, 
+                cuda_temp, num_of_elements, subarr_size);
+        cudaThreadSynchronize();
 
         /* Read data from GPU (either partially or fully sorted) */
         cudaMemcpy(data, cuda_data, size_in_bytes, cudaMemcpyDeviceToHost);
         cudaThreadSynchronize();
-
     }
 
     /* Clean up */
