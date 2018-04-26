@@ -24,19 +24,27 @@ __global__ void cudasort(float *data, float *temp, int num_of_elements,
     unsigned long right_lower;    /* start orf right subarray (aka mid + 1) */
     unsigned long temp_index;     /* Index into semi-sorted interim result buffer */
 
-    /* ith work item works on ith and ith + 1 subarrays,
-     * so don't do anything when ith subarray is more than
-     * total subarrays */
-    global_index = (blockIdx.x * gridDim.x) + (blockIdx.y * gridDim.y) + threadIdx.x;
+    /* Indexing in CUDA is hard. Due to the grid-like nature, getting the i-th
+     * thread means calculating the amount of threads/row times the row the i-th
+     * thread is on, add this to the amount of threads in the row until you 
+     * reach the block the i-th thread is in, then adding this to the amount of
+     * threads until you reach the i-th thread */
+    global_index = (gridDim.x * blockDim.x * blockIdx.y) + 
+                   (blockDim.x * blockIdx.x) + threadIdx.x;
+
+    /* i-th thread works on i-th and i-th + 1 subarrays, so don't do anything 
+     * when i-th subarray is more than total subarrays */
     left_lower = global_index * subarr_size;
     if(left_lower >= num_of_elements) {
         return;
     }
 
     /* Mergesort works on A[p..q] and A[q+1..r], so calculate p == left_lower,
-     * q = mid, q+1 = mid + 1 = right_lower, and r = right_upper
+     * q = mid, q+1 = mid + 1 = right_lower, and r = right_upper. Last subarray
+     * may end up being shorter than 
      */
-    right_upper = (left_lower + subarr_size - 1) >= (num_of_elements - 1) ? (num_of_elements - 1) : (left_lower + subarr_size - 1) ;
+    right_upper = (left_lower + subarr_size - 1) >= (num_of_elements - 1) ? 
+        (num_of_elements - 1) : (left_lower + subarr_size - 1) ;
     mid = (left_lower + right_upper) / 2;
     right_lower = mid + 1;
 
@@ -77,10 +85,10 @@ int cuda_sort(int num_of_elements, float *data)
     unsigned long size_in_bytes = num_of_elements * sizeof(float);
 
     /* Create buffers for initial data and temp buffer */
-    cudaMalloc((void **) &cuda_data, size_in_bytes);
-    cudaMalloc((void **) &cuda_temp, size_in_bytes);
     temp = (float *) malloc(size_in_bytes);
     memset(temp, 0, size_in_bytes);
+    cudaMalloc((void **) &cuda_data, size_in_bytes);
+    cudaMalloc((void **) &cuda_temp, size_in_bytes);
 
 
     cudaPrintfInit ();  /* For debugging */
