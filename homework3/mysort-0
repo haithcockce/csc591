@@ -1,0 +1,31 @@
+Sorting list of 16777216 floats
+FileInput: 32590
+memcpy: 32781
+Sorting on single-core: 3210912
+Verifying Result
+Pass
+Sorting list of 16777216 floats
+FileInput: 31600
+memcpy: 32709
+Sorting on single-core: 3214147
+Verifying Result
+Pass
+Sorting list of 16777216 floats
+FileInput: 32008
+memcpy: 32740
+Sorting on single-core: 3196565
+Verifying Result
+Pass
+Sorting list of 16777216 floats
+FileInput: 32432
+memcpy: 32650
+Sorting on single-core: 3210950
+Verifying Result
+Pass
+Sorting list of 16777216 floats
+FileInput: 32099
+memcpy: 33183
+Sorting on single-core: 3223302
+Verifying Result
+Pass
+

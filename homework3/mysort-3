@@ -1,0 +1,32 @@
+Sorting list of 16777216 floats
+FileInput: 32569
+memcpy: 33038
+Sorting on GPU: 43909365
+Verifying Result
+Pass
+Sorting list of 16777216 floats
+FileInput: 32367
+memcpy: 32629
+Sorting on GPU: 43904298
+Verifying Result
+Pass
+Sorting list of 16777216 floats
+FileInput: 32265
+memcpy: 32752
+Sorting on GPU: 44035303
+Verifying Result
+Pass
+Sorting list of 16777216 floats
+FileInput: 32676
+memcpy: 32630
+Sorting on GPU: 43975245
+Verifying Result
+Pass
+Sorting list of 16777216 floats
+FileInput: 32797
+memcpy: 32955
+Sorting on GPU: 43998829
+Verifying Result
+Pass
+
+
